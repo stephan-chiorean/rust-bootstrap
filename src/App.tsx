@@ -1,50 +1,98 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/tauri";
-import "./App.css";
+import { useState, useEffect } from 'react';
+import { Box, Button } from '@chakra-ui/react';
+import { ColorModeProvider, useColorMode } from './contexts/ColorModeContext';
+import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
+import { WorkstationProvider, useWorkstation } from './contexts/WorkstationContext';
+import { SelectionProvider } from './contexts/SelectionContext';
+import { WelcomeScreen } from './components/WelcomeScreen';
+import { HomePage } from './pages/HomePage';
+import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import { Header } from './components/Header';
+import { useRegistryWatcher } from './hooks/useFileWatcher';
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type View = 'welcome' | 'home' | 'project-detail';
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+function AppContent() {
+  const [view, setView] = useState<View>('welcome');
+  const { colorMode } = useColorMode();
+  const { currentWorkstation, setCurrentWorkstation } = useWorkstation();
+
+  // Watch for registry changes
+  useRegistryWatcher(() => {
+    // Reload projects when registry changes
+    if (view === 'home') {
+      // Trigger a re-render or reload
+      console.log('Registry changed, reloading projects...');
+    }
+  });
+
+  // Navigate to project detail when workstation is selected
+  useEffect(() => {
+    if (currentWorkstation && currentWorkstation.path && view === 'home') {
+      setView('project-detail');
+    }
+  }, [currentWorkstation, view]);
+
+  const handleNavigateHome = () => {
+    setCurrentWorkstation(null);
+    setView('home');
+  };
+
+  const handleGetStarted = () => {
+    setView('home');
+  };
+
+  // Render different views based on state
+  const renderView = () => {
+    switch (view) {
+      case 'welcome':
+        return <WelcomeScreen onGetStarted={handleGetStarted} />;
+      case 'home':
+        return <HomePage />;
+      case 'project-detail':
+        if (!currentWorkstation) {
+          return (
+            <Box p={8}>
+              <p>No project selected</p>
+              <Button onClick={handleNavigateHome}>Go to Home</Button>
+            </Box>
+          );
+        }
+        return (
+          <>
+            <Header onNavigateHome={handleNavigateHome} />
+            <ProjectDetailPage />
+          </>
+        );
+      default:
+        return <Box p={8}>Unknown view</Box>;
+    }
+  };
+
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <Box
+      minH="100vh"
+      bg="bg.main"
+      color="text.fg"
+      data-theme={colorMode}
+    >
+      {renderView()}
+    </Box>
+  );
+}
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+function App() {
+  return (
+    <ColorModeProvider>
+      <FeatureFlagsProvider>
+        <WorkstationProvider>
+          <SelectionProvider>
+            <AppContent />
+          </SelectionProvider>
+        </WorkstationProvider>
+      </FeatureFlagsProvider>
+    </ColorModeProvider>
   );
 }
 

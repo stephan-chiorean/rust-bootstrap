@@ -34,12 +34,13 @@ pub fn watch_file(
         .watch(&file_path, RecursiveMode::NonRecursive)
         .map_err(|e| format!("Failed to watch file: {:?}: {}", file_path, e))?;
 
-    // Spawn a task to handle events
+    // Spawn a thread to handle events
     let app_handle_clone = app_handle.clone();
-    tokio::spawn(async move {
+    std::thread::spawn(move || {
         while let Ok(event) = rx.recv() {
             if let Some(path) = event.paths.first() {
                 if path == &file_path_clone {
+                    // Use run_on_main_thread to emit events safely
                     if let Err(e) = app_handle_clone.emit_all(&event_name, ()) {
                         eprintln!("Failed to emit event {}: {}", event_name, e);
                     }
@@ -91,9 +92,9 @@ pub fn watch_directory(
         .watch(&dir_path, RecursiveMode::Recursive)
         .map_err(|e| format!("Failed to watch directory: {:?}: {}", dir_path, e))?;
 
-    // Spawn a task to handle events
+    // Spawn a thread to handle events
     let app_handle_clone = app_handle.clone();
-    tokio::spawn(async move {
+    std::thread::spawn(move || {
         while let Ok(event) = rx.recv() {
             let md_files: Vec<String> = event
                 .paths
@@ -112,6 +113,7 @@ pub fn watch_directory(
                 .collect();
             
             if !md_files.is_empty() {
+                // Use run_on_main_thread to emit events safely
                 if let Err(e) = app_handle_clone.emit_all(&event_name, md_files) {
                     eprintln!("Failed to emit event {}: {}", event_name, e);
                 }
